@@ -109,14 +109,14 @@ The target server must have installed:
 Your repository must contain (at the branch specified by `deploy_branch`):
 
 - `Makefile` with the following targets:
-    - `deploy` – pulls image, runs `docker compose up`, copies `.env`, runs migrations, clears caches.
-    - `health-check` – validates the new environment (can be a simple curl command).
-    - `switch-to-blue` / `switch-to-green` – updates Caddy configuration and reloads Caddy.
-    - `down` – stops containers for a given environment.
+  - `deploy` – pulls image, runs `docker compose up`, copies `.env`, runs migrations, clears caches.
+  - `health-check` – validates the new environment (can be a simple curl command).
+  - `switch-to-blue` / `switch-to-green` – updates Caddy configuration and reloads Caddy.
+  - `down` – stops containers for a given environment.
 - `docker-compose.prod.yml` – production Compose file that accepts `${ENV}`, `${PORT}`, `${IMAGE}` variables.
 - `.env.example` – template for Laravel environment variables.
 
-See the [example configuration repository](https://github.com/bugfix666/example-laravel-config) for a complete setup.
+To quickly bootstrap a compatible project, copy the example files from this repository's [`example/`](example/) folder into your Laravel project and adjust them to your needs.
 
 ## How traffic switching works
 

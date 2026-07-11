@@ -1,0 +1,31 @@
+services:
+  app:
+    image: ${IMAGE}
+    container_name: larasuperdock-app-${ENV}
+    restart: unless-stopped
+    working_dir: /www
+    env_file:
+      - ./${ENV}/.env
+    ports:
+      - "127.0.0.1:${PORT}:80"
+    volumes:
+      - laravel_storage:/www/storage
+      - laravel_bootstrap_cache:/www/bootstrap/cache
+    tmpfs:
+      - /run:size=64m,noexec,nosuid
+      - /tmp:size=64m,noexec,nosuid
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
+volumes:
+  laravel_storage:
+    name: laravel_storage_${ENV}
+  laravel_bootstrap_cache:
+    name: laravel_bootstrap_cache_${ENV}
+
+networks:
+  app-network:
+    external: true
+    name: app-network
