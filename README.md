@@ -4,7 +4,6 @@ A [GitHub Action](https://github.com/features/actions) that deploys a Laravel ap
 It manages Docker containers, Caddy reverse proxy, environment files, and health checks – all with zero-downtime traffic switching.
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/bugfix666/deploy-laravel-blue-green?label=version)
-![GitHub](https://img.shields.io/github/license/bugfix666/deploy-laravel-blue-green)
 
 ## How it works
 
