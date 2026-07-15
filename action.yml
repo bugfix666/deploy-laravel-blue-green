@@ -95,6 +95,7 @@ inputs:
     description: 'Debugging'
     required: false
     default: 'false'
+  # ─── Logging ───
   log_channel:
     description: 'Logging type'
     required: false
@@ -103,6 +104,24 @@ inputs:
     description: 'Logging level'
     required: false
     default: 'error'
+  # ─── Horizon auth ───
+  horizon_admin_user:
+    description: 'Horizon admin user'
+    required: false
+    default: 'horizon'
+  horizon_admin_password:
+    description: 'Horizon admin password'
+    required: false
+    default: 'horizon'
+  # ─── Telescope auth ───
+  telescope_admin_user:
+    description: 'Telescope admin user'
+    required: false
+    default: 'telescope'
+  telescope_admin_password:
+    description: 'Telescope admin password'
+    required: false
+    default: 'telescope'
 
 runs:
   using: 'composite'
@@ -169,6 +188,11 @@ runs:
           
             [ -n "${{ inputs.app_env }}" ] && sed -i "s/APP_ENV=.*/APP_ENV=${{ inputs.app_env }}/" "$ENV_FILE"
             [ -n "${{ inputs.app_debug }}" ] && sed -i "s/APP_DEBUG=.*/APP_DEBUG=${{ inputs.app_debug }}/" "$ENV_FILE"
+            [ -n "${{ inputs.horizon_admin_user }}" ] && sed -i "s/HORIZON_ADMIN_USER=.*/HORIZON_ADMIN_USER=${{ inputs.horizon_admin_user }}/" "$ENV_FILE"
+            [ -n "${{ inputs.horizon_admin_password }}" ] && sed -i "s/HORIZON_ADMIN_PASSWORD=.*/HORIZON_ADMIN_PASSWORD=${{ inputs.horizon_admin_password }}/" "$ENV_FILE"          
+            [ -n "${{ inputs.telescope_admin_user }}" ] && sed -i "s/TELESCOPE_ADMIN_USER=.*/TELESCOPE_ADMIN_USER=${{ inputs.telescope_admin_user }}/" "$ENV_FILE"
+            [ -n "${{ inputs.telescope_admin_password }}" ] && sed -i "s/TELESCOPE_ADMIN_PASSWORD=.*/TELESCOPE_ADMIN_PASSWORD=${{ inputs.telescope_admin_password }}/" "$ENV_FILE"
+          
             [ -n "${{ inputs.log_channel }}" ] && sed -i "s/LOG_CHANNEL=.*/LOG_CHANNEL=${{ inputs.log_channel }}/" "$ENV_FILE"
             [ -n "${{ inputs.log_level }}" ] && sed -i "s/LOG_LEVEL=.*/LOG_LEVEL=${{ inputs.log_level }}/" "$ENV_FILE"
 
