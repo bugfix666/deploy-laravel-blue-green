@@ -87,6 +87,22 @@ inputs:
     description: 'Add "base64:" prefix to APP_KEY (set false to use plain hex string)'
     required: false
     default: 'true'
+  app_env:
+    description: 'Environment (local, production, develop)'
+    required: false
+    default: 'production'
+  app_debug:
+    description: 'Debugging'
+    required: false
+    default: 'false'
+  log_channel:
+    description: 'Logging type'
+    required: false
+    default: 'stack'
+  log_level:
+    description: 'Logging level'
+    required: false
+    default: 'error'
 
 runs:
   using: 'composite'
@@ -111,19 +127,19 @@ runs:
           BRANCH="${{ inputs.deploy_branch }}"
           HEALTH_PATH="${{ inputs.health_path }}"
 
-          # Проверка зависимостей
+          # Checking Dependencies
           command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not found"; exit 1; }
           command -v make >/dev/null 2>&1 || { echo "ERROR: make not found"; exit 1; }
           command -v curl >/dev/null 2>&1 || { echo "ERROR: curl not found"; exit 1; }
           command -v git >/dev/null 2>&1 || { echo "ERROR: git not found"; exit 1; }
 
-          # Сеть Docker
+          # Docker Network
           docker network inspect app-network >/dev/null 2>&1 || docker network create app-network
 
-          # Логин в регистри
+          # Log in to the registry
           echo "${{ inputs.registry_password }}" | docker login ${{ inputs.registry }} -u ${{ inputs.registry_username }} --password-stdin
 
-          # Клонируем репозиторий с конфигами
+          # Clone the repository containing the configurations
           TMP_DIR=$(mktemp -d)
           git clone --branch "$BRANCH" "$REPO_URL" "$TMP_DIR"
 
@@ -132,13 +148,13 @@ runs:
           cp "$TMP_DIR/docker-compose.prod.yml" "$BASE_DIR/docker-compose.prod.yml"
           cp "$TMP_DIR/.env.example" "$BASE_DIR/.env.example"
 
-          # Подготовка .env для blue и green
+          # Preparing the .env file for blue and green
           for ENV_NAME in blue green; do
             ENV_FILE="$BASE_DIR/$ENV_NAME/.env"
             mkdir -p "$BASE_DIR/$ENV_NAME"
             cp "$BASE_DIR/.env.example" "$ENV_FILE"
 
-            # Генерация ключей
+            # Key Generation
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
               if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
                 NEW_KEY="base64:$(openssl rand -base64 32)"
@@ -150,8 +166,13 @@ runs:
               JWT_SECRET="$(openssl rand -hex 64)"
               sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
             fi
+          
+            [ -n "${{ inputs.app_env }}" ] && sed -i "s/APP_ENV=.*/APP_ENV=${{ inputs.app_env }}/" "$ENV_FILE"
+            [ -n "${{ inputs.app_debug }}" ] && sed -i "s/APP_DEBUG=.*/APP_DEBUG=${{ inputs.app_debug }}/" "$ENV_FILE"
+            [ -n "${{ inputs.log_channel }}" ] && sed -i "s/LOG_CHANNEL=.*/LOG_CHANNEL=${{ inputs.log_channel }}/" "$ENV_FILE"
+            [ -n "${{ inputs.log_level }}" ] && sed -i "s/LOG_LEVEL=.*/LOG_LEVEL=${{ inputs.log_level }}/" "$ENV_FILE"
 
-            # Подстановка переменных окружения
+            # Substitution of Environment Variables
             sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=pgsql/" "$ENV_FILE"
             [ -n "${{ inputs.db_host }}" ] && sed -i "s/DB_HOST=.*/DB_HOST=${{ inputs.db_host }}/" "$ENV_FILE"
             [ -n "${{ inputs.db_port }}" ] && sed -i "s/DB_PORT=.*/DB_PORT=${{ inputs.db_port }}/" "$ENV_FILE"
@@ -169,14 +190,14 @@ runs:
             fi
           done
 
-          # Симлинк конфигурации Caddy (если нужно)
+          # Caddy configuration symlink (if needed)
           CADDY_SYSTEM_CONFIG="/etc/caddy/Caddyfile"
           if [ ! -L "$CADDY_SYSTEM_CONFIG" ] || [ "$(readlink "$CADDY_SYSTEM_CONFIG")" != "$CADDY_CONFIG" ]; then
             sudo ln -sf "$CADDY_CONFIG" "$CADDY_SYSTEM_CONFIG"
             sudo systemctl restart caddy || true
           fi
 
-          # Определение активного и нового окружения
+          # Defining an Active and New Environment
           if grep -q "localhost:8081" "$CADDY_CONFIG" 2>/dev/null; then
             ACTIVE="blue"
             ACTIVE_PORT="8081"
@@ -197,12 +218,12 @@ runs:
           export PORT="$NEW_PORT"
           export IMAGE="$IMAGE"
 
-          # Загружаем .env нового окружения в shell
+          # Load the new environment's .env file in the shell
           set -a
           source "$BASE_DIR/$NEW/.env"
           set +a
 
-          # Деплой через Makefile
+          # Deploy via Makefile
           make deploy
 
           # Health check
@@ -215,11 +236,11 @@ runs:
             sleep 5
           done
 
-          # Переключение трафика
+          # Traffic Redirection
           make switch-to-"$NEW"
           sudo caddy reload --config "$CADDY_CONFIG" || sudo systemctl restart caddy || true
 
-          # Остановка старого окружения
+          # Stopping the Old Entourage
           make down ENV="$ACTIVE" || true
 
           rm -rf "$TMP_DIR"
