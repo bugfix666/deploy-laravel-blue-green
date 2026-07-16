@@ -51,7 +51,7 @@ inputs:
     required: false
     default: '/www'
   health_path:
-    description: 'Health check endpoint (e.g. /health)'
+    description: 'Health check endpoint'
     required: false
     default: '/health'
 
@@ -80,11 +80,11 @@ inputs:
 
   # ─── Key generation ───
   generate_app_key:
-    description: 'Automatically generate APP_KEY (base64:…) and JWT_SECRET (hex)'
+    description: 'Automatically generate APP_KEY and JWT_SECRET'
     required: false
     default: 'true'
   app_key_prefix:
-    description: 'Add "base64:" prefix to APP_KEY (set false to use plain hex string)'
+    description: 'Add base64: prefix to APP_KEY'
     required: false
     default: 'true'
   app_env:
@@ -135,12 +135,11 @@ runs:
         port: ${{ inputs.ssh_port }}
         script_stop: true
         script: |
-          #!/bin/bash
-          set -e
-          set -x
+          set -euo pipefail
 
           BASE_DIR="${{ inputs.base_dir }}"
           CADDY_CONFIG="$BASE_DIR/Caddyfile"
+          CURRENT_SLOT_FILE="$BASE_DIR/.current_slot"
           IMAGE="${{ inputs.image_name }}"
           REPO_URL="${{ inputs.repo_ssh_url }}"
           BRANCH="${{ inputs.deploy_branch }}"
@@ -156,10 +155,12 @@ runs:
           docker network inspect app-network >/dev/null 2>&1 || docker network create app-network
 
           # Log in to the registry
-          echo "${{ inputs.registry_password }}" | docker login ${{ inputs.registry }} -u ${{ inputs.registry_username }} --password-stdin
+          echo "${{ inputs.registry_password }}" | docker login "${{ inputs.registry }}" -u "${{ inputs.registry_username }}" --password-stdin
 
-          # Clone the repository containing the configurations
           TMP_DIR=$(mktemp -d)
+          cleanup() { rm -rf "$TMP_DIR"; }
+          trap cleanup EXIT
+
           git clone --branch "$BRANCH" "$REPO_URL" "$TMP_DIR"
 
           mkdir -p "$BASE_DIR"
@@ -168,104 +169,88 @@ runs:
           cp "$TMP_DIR/.env.example" "$BASE_DIR/.env.example"
 
           # Preparing the .env file for blue and green
-          for ENV_NAME in blue green; do
-            ENV_FILE="$BASE_DIR/$ENV_NAME/.env"
-            mkdir -p "$BASE_DIR/$ENV_NAME"
-            cp "$BASE_DIR/.env.example" "$ENV_FILE"
+          for SLOT in blue green; do
+            mkdir -p "$BASE_DIR/$SLOT"
+            cp "$BASE_DIR/.env.example" "$BASE_DIR/$SLOT/.env"
 
             # Key Generation
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
               if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-                NEW_KEY="base64:$(openssl rand -base64 32)"
+                APP_KEY="base64:$(openssl rand -base64 32)"
               else
-                NEW_KEY="$(openssl rand -hex 32)"
+                APP_KEY="$(openssl rand -hex 32)"
               fi
-              sed -i "s|^APP_KEY=.*|APP_KEY=${NEW_KEY}|" "$ENV_FILE"
-
               JWT_SECRET="$(openssl rand -hex 64)"
-              sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
+              sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "$BASE_DIR/$SLOT/.env"
+              sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$BASE_DIR/$SLOT/.env"
             fi
-          
-            [ -n "${{ inputs.app_env }}" ] && sed -i "s/APP_ENV=.*/APP_ENV=${{ inputs.app_env }}/" "$ENV_FILE"
-            [ -n "${{ inputs.app_debug }}" ] && sed -i "s/APP_DEBUG=.*/APP_DEBUG=${{ inputs.app_debug }}/" "$ENV_FILE"
-            [ -n "${{ inputs.horizon_admin_user }}" ] && sed -i "s/HORIZON_ADMIN_USER=.*/HORIZON_ADMIN_USER=${{ inputs.horizon_admin_user }}/" "$ENV_FILE"
-            [ -n "${{ inputs.horizon_admin_password }}" ] && sed -i "s/HORIZON_ADMIN_PASSWORD=.*/HORIZON_ADMIN_PASSWORD=${{ inputs.horizon_admin_password }}/" "$ENV_FILE"          
-            [ -n "${{ inputs.telescope_admin_user }}" ] && sed -i "s/TELESCOPE_ADMIN_USER=.*/TELESCOPE_ADMIN_USER=${{ inputs.telescope_admin_user }}/" "$ENV_FILE"
-            [ -n "${{ inputs.telescope_admin_password }}" ] && sed -i "s/TELESCOPE_ADMIN_PASSWORD=.*/TELESCOPE_ADMIN_PASSWORD=${{ inputs.telescope_admin_password }}/" "$ENV_FILE"
-          
-            [ -n "${{ inputs.log_channel }}" ] && sed -i "s/LOG_CHANNEL=.*/LOG_CHANNEL=${{ inputs.log_channel }}/" "$ENV_FILE"
-            [ -n "${{ inputs.log_level }}" ] && sed -i "s/LOG_LEVEL=.*/LOG_LEVEL=${{ inputs.log_level }}/" "$ENV_FILE"
 
-            # Substitution of Environment Variables
-            sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=pgsql/" "$ENV_FILE"
-            [ -n "${{ inputs.db_host }}" ] && sed -i "s/DB_HOST=.*/DB_HOST=${{ inputs.db_host }}/" "$ENV_FILE"
-            [ -n "${{ inputs.db_port }}" ] && sed -i "s/DB_PORT=.*/DB_PORT=${{ inputs.db_port }}/" "$ENV_FILE"
-            sed -i "s/DB_DATABASE=.*/DB_DATABASE=app_${ENV_NAME}/" "$ENV_FILE"
-            [ -n "${{ inputs.db_username }}" ] && sed -i "s/DB_USERNAME=.*/DB_USERNAME=${{ inputs.db_username }}/" "$ENV_FILE"
-            if [ -n "${{ inputs.db_password }}" ]; then
-              DB_PASSWORD_ESC=$(echo "${{ inputs.db_password }}" | sed 's/[\/&]/\\&/g')
-              sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASSWORD_ESC/" "$ENV_FILE"
-            fi
-            [ -n "${{ inputs.redis_host }}" ] && sed -i "s/REDIS_HOST=.*/REDIS_HOST=${{ inputs.redis_host }}/" "$ENV_FILE"
-            [ -n "${{ inputs.redis_port }}" ] && sed -i "s/REDIS_PORT=.*/REDIS_PORT=${{ inputs.redis_port }}/" "$ENV_FILE"
-            if [ -n "${{ inputs.redis_password }}" ]; then
-              REDIS_PASSWORD_ESC=$(echo "${{ inputs.redis_password }}" | sed 's/[\/&]/\\&/g')
-              sed -i "s/REDIS_PASSWORD=.*/REDIS_PASSWORD=$REDIS_PASSWORD_ESC/" "$ENV_FILE"
-            fi
+            sed -i "s|^APP_ENV=.*|APP_ENV=${{ inputs.app_env }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${{ inputs.app_debug }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^LOG_CHANNEL=.*|LOG_CHANNEL=${{ inputs.log_channel }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^LOG_LEVEL=.*|LOG_LEVEL=${{ inputs.log_level }}|" "$BASE_DIR/$SLOT/.env"
+
+            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.db_host }}" ] && sed -i "s|^DB_HOST=.*|DB_HOST=${{ inputs.db_host }}|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.db_port }}" ] && sed -i "s|^DB_PORT=.*|DB_PORT=${{ inputs.db_port }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=app_${SLOT}|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.db_username }}" ] && sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ inputs.db_username }}|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.db_password }}" ] && sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ inputs.db_password }}|" "$BASE_DIR/$SLOT/.env"
+
+            [ -n "${{ inputs.redis_host }}" ] && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${{ inputs.redis_host }}|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.redis_port }}" ] && sed -i "s|^REDIS_PORT=.*|REDIS_PORT=${{ inputs.redis_port }}|" "$BASE_DIR/$SLOT/.env"
+            [ -n "${{ inputs.redis_password }}" ] && sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${{ inputs.redis_password }}|" "$BASE_DIR/$SLOT/.env"
+
+            sed -i "s|^HORIZON_ADMIN_USER=.*|HORIZON_ADMIN_USER=${{ inputs.horizon_admin_user }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^HORIZON_ADMIN_PASSWORD=.*|HORIZON_ADMIN_PASSWORD=${{ inputs.horizon_admin_password }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^TELESCOPE_ADMIN_USER=.*|TELESCOPE_ADMIN_USER=${{ inputs.telescope_admin_user }}|" "$BASE_DIR/$SLOT/.env"
+            sed -i "s|^TELESCOPE_ADMIN_PASSWORD=.*|TELESCOPE_ADMIN_PASSWORD=${{ inputs.telescope_admin_password }}|" "$BASE_DIR/$SLOT/.env"
           done
 
-          # Caddy configuration symlink (if needed)
-          CADDY_SYSTEM_CONFIG="/etc/caddy/Caddyfile"
-          if [ ! -L "$CADDY_SYSTEM_CONFIG" ] || [ "$(readlink "$CADDY_SYSTEM_CONFIG")" != "$CADDY_CONFIG" ]; then
-            sudo ln -sf "$CADDY_CONFIG" "$CADDY_SYSTEM_CONFIG"
-            sudo systemctl restart caddy || true
+          if [ ! -f "$CURRENT_SLOT_FILE" ]; then
+            echo blue > "$CURRENT_SLOT_FILE"
           fi
 
-          # Defining an Active and New Environment
-          if grep -q "localhost:8081" "$CADDY_CONFIG" 2>/dev/null; then
-            ACTIVE="blue"
-            ACTIVE_PORT="8081"
-          elif grep -q "localhost:8082" "$CADDY_CONFIG" 2>/dev/null; then
-            ACTIVE="green"
-            ACTIVE_PORT="8082"
+          CURRENT_SLOT="$(cat "$CURRENT_SLOT_FILE")"
+          if [ "$CURRENT_SLOT" = "blue" ]; then
+            NEW_SLOT="green"
+            NEW_PORT="8082"
           else
-            ACTIVE="blue"
-            ACTIVE_PORT="8081"
+            NEW_SLOT="blue"
+            NEW_PORT="8081"
           fi
 
-          [ "$ACTIVE" = "blue" ] && { NEW="green"; NEW_PORT="8082"; } || { NEW="blue"; NEW_PORT="8081"; }
-          echo "Active: $ACTIVE (port $ACTIVE_PORT), New: $NEW (port $NEW_PORT)"
+          export IMAGE="$IMAGE"
+          export ENV="$NEW_SLOT"
+          export PORT="$NEW_PORT"
 
           cd "$BASE_DIR"
 
-          export ENV="$NEW"
-          export PORT="$NEW_PORT"
-          export IMAGE="$IMAGE"
+          echo "Deploying to $NEW_SLOT on port $NEW_PORT"
+          make "deploy-$NEW_SLOT"
 
-          # Load the new environment's .env file in the shell
-          set -a
-          source "$BASE_DIR/$NEW/.env"
-          set +a
-
-          # Deploy via Makefile
-          make deploy
-
-          # Health check
-          echo "Checking health of $NEW..."
-          for i in {1..10}; do
-            if curl -f -s -o /dev/null -w "%{http_code}" "http://localhost:${NEW_PORT}${HEALTH_PATH}" | grep -q '200'; then
+          echo "Waiting for health check..."
+          for i in $(seq 1 10); do
+            if curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
               echo "Health OK"
               break
             fi
             sleep 5
           done
 
-          # Traffic Redirection
-          make switch-to-"$NEW"
-          sudo caddy reload --config "$CADDY_CONFIG" || sudo systemctl restart caddy || true
+          if ! curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
+            echo "Health check failed, rollback to $CURRENT_SLOT"
+            make "switch-to-$CURRENT_SLOT" || true
+            exit 1
+          fi
 
-          # Stopping the Old Entourage
-          make down ENV="$ACTIVE" || true
+          if ! make "switch-to-$NEW_SLOT"; then
+            echo "Switch failed, rollback to $CURRENT_SLOT"
+            make "switch-to-$CURRENT_SLOT" || true
+            exit 1
+          fi
 
-          rm -rf "$TMP_DIR"
-          echo "Deployment complete. Active: $NEW"
+          echo "$NEW_SLOT" > "$CURRENT_SLOT_FILE"
+
+          make down ENV="$CURRENT_SLOT" || true
+          echo "Deployment complete. Active: $NEW_SLOT"
