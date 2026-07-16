@@ -2,298 +2,294 @@ name: 'Deploy Laravel Blue-Green'
 description: 'Deploy a Laravel application using Blue-Green strategy via SSH (Caddy, Docker, Supervisor)'
 
 branding:
-	icon: 'upload-cloud'
-	color: 'blue'
+  icon: 'upload-cloud'
+  color: 'blue'
 
 inputs:
-	# ─── SSH connection ───
-	ssh_host:
-	  description: 'SSH host'
-	  required: true
-	ssh_user:
-	  description: 'SSH user'
-	  required: true
-	ssh_key:
-	  description: 'SSH private key'
-	  required: true
-	ssh_port:
-	  description: 'SSH port'
-	  required: false
-	  default: '22'
+  ssh_host:
+    description: 'SSH host'
+    required: true
+  ssh_user:
+    description: 'SSH user'
+    required: true
+  ssh_key:
+    description: 'SSH private key'
+    required: true
+  ssh_port:
+    description: 'SSH port'
+    required: false
+    default: '22'
 
-	# ─── Docker Registry ───
-	registry:
-	  description: 'Container registry (e.g. ghcr.io)'
-	  required: false
-	  default: 'ghcr.io'
-	registry_username:
-	  description: 'Registry username'
-	  required: true
-	registry_password:
-	  description: 'Registry password or token'
-	  required: true
-	image_name:
-	  description: 'Full Docker image name with tag (e.g. ghcr.io/owner/repo:latest)'
-	  required: true
+  registry:
+    description: 'Container registry (e.g. ghcr.io)'
+    required: false
+    default: 'ghcr.io'
+  registry_username:
+    description: 'Registry username'
+    required: true
+  registry_password:
+    description: 'Registry password or token'
+    required: true
+  image_name:
+    description: 'Full Docker image name with tag (e.g. ghcr.io/owner/repo:latest)'
+    required: true
 
-	# ─── Repository with configs ───
-	repo_ssh_url:
-	  description: 'Git SSH URL of the repository that contains Makefile, docker-compose.prod.yml, .env.example'
-	  required: true
-	deploy_branch:
-	  description: 'Branch from which to take configs'
-	  required: false
-	  default: 'deploy'
+  repo_ssh_url:
+    description: 'Git SSH URL of the repository that contains Makefile, docker-compose.prod.yml, .env.example'
+    required: true
+  deploy_branch:
+    description: 'Branch from which to take configs'
+    required: false
+    default: 'deploy'
 
-	# ─── Paths ───
-	base_dir:
-	  description: 'Base directory on the server'
-	  required: false
-	  default: '/www'
-	health_path:
-	  description: 'Health check endpoint'
-	  required: false
-	  default: '/health'
+  base_dir:
+    description: 'Base directory on the server'
+    required: false
+    default: '/www/back'
+  health_path:
+    description: 'Health check endpoint (e.g. /health)'
+    required: false
+    default: '/health'
 
-	# ─── Secrets for .env ───
-	db_host:
-	  description: 'Database host'
-	  required: false
-	db_port:
-	  description: 'Database port'
-	  required: false
-	db_username:
-	  description: 'Database username'
-	  required: false
-	db_password:
-	  description: 'Database password'
-	  required: false
-	redis_host:
-	  description: 'Redis host'
-	  required: false
-	redis_port:
-	  description: 'Redis port'
-	  required: false
-	redis_password:
-	  description: 'Redis password'
-	  required: false
+  db_host:
+    description: 'Database host'
+    required: false
+  db_port:
+    description: 'Database port'
+    required: false
+  db_username:
+    description: 'Database username'
+    required: false
+  db_password:
+    description: 'Database password'
+    required: false
+  redis_host:
+    description: 'Redis host'
+    required: false
+  redis_port:
+    description: 'Redis port'
+    required: false
+  redis_password:
+    description: 'Redis password'
+    required: false
 
-	# ─── Key generation ───
-	generate_app_key:
-	  description: 'Automatically generate APP_KEY and JWT_SECRET'
-	  required: false
-	  default: 'true'
-	app_key_prefix:
-	  description: 'Add base64: prefix to APP_KEY'
-	  required: false
-	  default: 'true'
-	app_env:
-	  description: 'Environment (local, production, develop)'
-	  required: false
-	  default: 'production'
-	app_debug:
-	  description: 'Debugging'
-	  required: false
-	  default: 'false'
-	# ─── Logging ───
-	log_channel:
-	  description: 'Logging type'
-	  required: false
-	  default: 'stack'
-	log_level:
-	  description: 'Logging level'
-	  required: false
-	  default: 'error'
-	# ─── Horizon auth ───
-	horizon_admin_user:
-	  description: 'Horizon admin user'
-	  required: false
-	  default: 'horizon'
-	horizon_admin_password:
-	  description: 'Horizon admin password'
-	  required: false
-	  default: 'horizon'
-	# ─── Telescope auth ───
-	telescope_admin_user:
-	  description: 'Telescope admin user'
-	  required: false
-	  default: 'telescope'
-	telescope_admin_password:
-	  description: 'Telescope admin password'
-	  required: false
-	  default: 'telescope'
+  generate_app_key:
+    description: 'Automatically generate APP_KEY (base64:...) and JWT_SECRET (hex)'
+    required: false
+    default: 'true'
+  app_key_prefix:
+    description: 'Add "base64:" prefix to APP_KEY (set false to use plain hex string)'
+    required: false
+    default: 'true'
+  app_env:
+    description: 'Environment (local, production, develop)'
+    required: false
+    default: 'production'
+  app_debug:
+    description: 'Debugging'
+    required: false
+    default: 'false'
+
+  log_channel:
+    description: 'Logging type'
+    required: false
+    default: 'stack'
+  log_level:
+    description: 'Logging level'
+    required: false
+    default: 'error'
+
+  horizon_admin_user:
+    description: 'Horizon admin user'
+    required: false
+    default: 'horizon'
+  horizon_admin_password:
+    description: 'Horizon admin password'
+    required: false
+    default: 'horizon'
+
+  telescope_admin_user:
+    description: 'Telescope admin user'
+    required: false
+    default: 'telescope'
+  telescope_admin_password:
+    description: 'Telescope admin password'
+    required: false
+    default: 'telescope'
 
 runs:
-	using: 'composite'
-	steps:
-	  - name: Deploy via SSH
-	    uses: appleboy/ssh-action@v1.2.0
-	    with:
-	      host: ${{ inputs.ssh_host }}
-	      username: ${{ inputs.ssh_user }}
-	      key: ${{ inputs.ssh_key }}
-	      port: ${{ inputs.ssh_port }}
-	      script_stop: true
-	      script: |
-	        #!/usr/bin/env bash
-	        set -euo pipefail
+  using: 'composite'
+  steps:
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1.2.0
+      with:
+        host: ${{ inputs.ssh_host }}
+        username: ${{ inputs.ssh_user }}
+        key: ${{ inputs.ssh_key }}
+        port: ${{ inputs.ssh_port }}
+        script_stop: false
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
 
-	        log() {
-	          printf '\n[%s] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$*"
-	        }
+          log() {
+            printf '\n[%s] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$*"
+          }
 
-	        fail() {
-	          log "ERROR: $*"
-	          exit 1
-	        }
+          fail() {
+            log "ERROR: $*"
+            exit 1
+          }
 
-	        run() {
-	          log "RUN: $*"
-	          "$@"
-	        }
+          run() {
+            log "RUN: $*"
+            "$@"
+          }
 
-	        trap 'fail "Command failed at line $LINENO: $BASH_COMMAND"' ERR
-	      
-	        BASE_DIR="${{ inputs.base_dir }}"
-	        CADDY_CONFIG="$BASE_DIR/Caddyfile"
-	        CURRENT_SLOT_FILE="$BASE_DIR/.current_slot"
-	        IMAGE="${{ inputs.image_name }}"
-	        REPO_URL="${{ inputs.repo_ssh_url }}"
-	        BRANCH="${{ inputs.deploy_branch }}"
-	        HEALTH_PATH="${{ inputs.health_path }}"
+          trap 'fail "Command failed at line $LINENO: $BASH_COMMAND"' ERR
 
-	        log "Starting deployment"
-	        log "whoami=$(whoami)"
-	        log "pwd=$(pwd)"
-	        log "base_dir=$BASE_DIR"
-	        log "repo_url=$REPO_URL"
-	        log "branch=$BRANCH"
-	        log "health_path=$HEALTH_PATH"
-	        log "image=$IMAGE"
+          BASE_DIR="${{ inputs.base_dir }}"
+          CADDY_CONFIG="$BASE_DIR/Caddyfile"
+          CURRENT_SLOT_FILE="$BASE_DIR/.current_slot"
+          IMAGE="${{ inputs.image_name }}"
+          REPO_URL="${{ inputs.repo_ssh_url }}"
+          BRANCH="${{ inputs.deploy_branch }}"
+          HEALTH_PATH="${{ inputs.health_path }}"
 
-	        for cmd in docker make curl git openssl sed; do
-	          command -v "$cmd" >/dev/null 2>&1 || fail "$cmd not found"
-	          log "Found dependency: $cmd -> $(command -v "$cmd")"
-	        done
+          log "Starting deployment"
+          log "whoami=$(whoami)"
+          log "pwd=$(pwd)"
+          log "base_dir=$BASE_DIR"
+          log "repo_url=$REPO_URL"
+          log "branch=$BRANCH"
+          log "health_path=$HEALTH_PATH"
+          log "image=$IMAGE"
 
-	        run docker network inspect app-network >/dev/null 2>&1 || run docker network create app-network
+          for cmd in docker make curl git openssl sed; do
+            command -v "$cmd" >/dev/null 2>&1 || fail "$cmd not found"
+            log "Found dependency: $cmd -> $(command -v "$cmd")"
+          done
 
-	        log "Logging in to registry"
-	        printf '%s' "${{ inputs.registry_password }}" | run docker login "${{ inputs.registry }}" -u "${{ inputs.registry_username }}" --password-stdin
+          run docker network inspect app-network >/dev/null 2>&1 || run docker network create app-network
 
-	        TMP_DIR="$(mktemp -d)"
-	        cleanup() {
-	          log "Cleaning up temp dir: $TMP_DIR"
-	          rm -rf "$TMP_DIR"
-	        }
-	        trap cleanup EXIT
+          log "Logging in to registry"
+          printf '%s' "${{ inputs.registry_password }}" | run docker login "${{ inputs.registry }}" -u "${{ inputs.registry_username }}" --password-stdin
 
-	        log "Cloning config repository"
-	        if ! git clone --branch "$BRANCH" "$REPO_URL" "$TMP_DIR"; then
-	          fail "git clone failed: repo_url=$REPO_URL branch=$BRANCH"
-	        fi
+          TMP_DIR="$(mktemp -d)"
+          cleanup() {
+            log "Cleaning up temp dir: $TMP_DIR"
+            rm -rf "$TMP_DIR"
+          }
+          trap cleanup EXIT
 
-	        log "Preparing base directory"
-	        run mkdir -p "$BASE_DIR"
-	        run cp "$TMP_DIR/Makefile" "$BASE_DIR/Makefile"
-	        run cp "$TMP_DIR/docker-compose.prod.yml" "$BASE_DIR/docker-compose.prod.yml"
-	        run cp "$TMP_DIR/.env.example" "$BASE_DIR/.env.example"
+          log "Cloning config repository"
+          if ! git clone --branch "$BRANCH" "$REPO_URL" "$TMP_DIR"; then
+            fail "git clone failed: repo_url=$REPO_URL branch=$BRANCH"
+          fi
 
-	        log "Detecting current slot"
-	        if [ -f "$CURRENT_SLOT_FILE" ]; then
-	          CURRENT_SLOT="$(cat "$CURRENT_SLOT_FILE")"
-	        else
-	          CURRENT_SLOT="blue"
-	          echo "$CURRENT_SLOT" > "$CURRENT_SLOT_FILE"
-	        fi
+          log "Preparing base directory"
+          run mkdir -p "$BASE_DIR"
+          run cp "$TMP_DIR/Makefile" "$BASE_DIR/Makefile"
+          run cp "$TMP_DIR/docker-compose.prod.yml" "$BASE_DIR/docker-compose.prod.yml"
+          run cp "$TMP_DIR/.env.example" "$BASE_DIR/.env.example"
 
-	        if [ "$CURRENT_SLOT" = "blue" ]; then
-	          NEW_SLOT="green"
-	          NEW_PORT="8082"
-	        else
-	          NEW_SLOT="blue"
-	          NEW_PORT="8081"
-	        fi
+          log "Detecting current slot"
+          if [ -f "$CURRENT_SLOT_FILE" ]; then
+            CURRENT_SLOT="$(cat "$CURRENT_SLOT_FILE")"
+          else
+            CURRENT_SLOT="blue"
+            echo "$CURRENT_SLOT" > "$CURRENT_SLOT_FILE"
+          fi
 
-	        log "Current slot=$CURRENT_SLOT, new slot=$NEW_SLOT, new port=$NEW_PORT"
+          if [ "$CURRENT_SLOT" = "blue" ]; then
+            NEW_SLOT="green"
+            NEW_PORT="8082"
+          else
+            NEW_SLOT="blue"
+            NEW_PORT="8081"
+          fi
 
-	        log "Preparing env files"
-	        for SLOT in blue green; do
-	          SLOT_DIR="$BASE_DIR/$SLOT"
-	          ENV_FILE="$SLOT_DIR/.env"
+          log "Current slot=$CURRENT_SLOT, new slot=$NEW_SLOT, new port=$NEW_PORT"
 
-	          run mkdir -p "$SLOT_DIR"
-	          run cp "$BASE_DIR/.env.example" "$ENV_FILE"
+          log "Preparing env files"
+          for SLOT in blue green; do
+            SLOT_DIR="$BASE_DIR/$SLOT"
+            ENV_FILE="$SLOT_DIR/.env"
 
-	          if [ "${{ inputs.generate_app_key }}" = "true" ]; then
-	            if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-	              APP_KEY="base64:$(openssl rand -base64 32)"
-	            else
-	              APP_KEY="$(openssl rand -hex 32)"
-	            fi
-	            JWT_SECRET="$(openssl rand -hex 64)"
-	            sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "$ENV_FILE"
-	            sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
-	            log "Generated keys for $SLOT"
-	          fi
+            run mkdir -p "$SLOT_DIR"
+            run cp "$BASE_DIR/.env.example" "$ENV_FILE"
 
-	          sed -i "s|^APP_ENV=.*|APP_ENV=${{ inputs.app_env }}|" "$ENV_FILE"
-	          sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${{ inputs.app_debug }}|" "$ENV_FILE"
-	          sed -i "s|^LOG_CHANNEL=.*|LOG_CHANNEL=${{ inputs.log_channel }}|" "$ENV_FILE"
-	          sed -i "s|^LOG_LEVEL=.*|LOG_LEVEL=${{ inputs.log_level }}|" "$ENV_FILE"
-	          sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" "$ENV_FILE"
-	      
-	          [ -n "${{ inputs.db_host }}" ] && sed -i "s|^DB_HOST=.*|DB_HOST=${{ inputs.db_host }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.db_port }}" ] && sed -i "s|^DB_PORT=.*|DB_PORT=${{ inputs.db_port }}|" "$ENV_FILE"
-	          sed -i "s|^DB_DATABASE=.*|DB_DATABASE=app_${SLOT}|" "$ENV_FILE"
-	          [ -n "${{ inputs.db_username }}" ] && sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ inputs.db_username }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.db_password }}" ] && sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ inputs.db_password }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.redis_host }}" ] && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${{ inputs.redis_host }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.redis_port }}" ] && sed -i "s|^REDIS_PORT=.*|REDIS_PORT=${{ inputs.redis_port }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.redis_password }}" ] && sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${{ inputs.redis_password }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.horizon_admin_user }}" ] && sed -i "s|^HORIZON_ADMIN_USER=.*|HORIZON_ADMIN_USER=${{ inputs.horizon_admin_user }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.horizon_admin_password }}" ] && sed -i "s|^HORIZON_ADMIN_PASSWORD=.*|HORIZON_ADMIN_PASSWORD=${{ inputs.horizon_admin_password }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.telescope_admin_user }}" ] && sed -i "s|^TELESCOPE_ADMIN_USER=.*|TELESCOPE_ADMIN_USER=${{ inputs.telescope_admin_user }}|" "$ENV_FILE"
-	          [ -n "${{ inputs.telescope_admin_password }}" ] && sed -i "s|^TELESCOPE_ADMIN_PASSWORD=.*|TELESCOPE_ADMIN_PASSWORD=${{ inputs.telescope_admin_password }}|" "$ENV_FILE"
+            if [ "${{ inputs.generate_app_key }}" = "true" ]; then
+              if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
+                APP_KEY="base64:$(openssl rand -base64 32)"
+              else
+                APP_KEY="$(openssl rand -hex 32)"
+              fi
+              JWT_SECRET="$(openssl rand -hex 64)"
+              sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "$ENV_FILE"
+              sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
+              log "Generated keys for $SLOT"
+            fi
 
-	          log "Prepared env for $SLOT: $ENV_FILE"
-	        done
+            sed -i "s|^APP_ENV=.*|APP_ENV=${{ inputs.app_env }}|" "$ENV_FILE"
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${{ inputs.app_debug }}|" "$ENV_FILE"
+            sed -i "s|^LOG_CHANNEL=.*|LOG_CHANNEL=${{ inputs.log_channel }}|" "$ENV_FILE"
+            sed -i "s|^LOG_LEVEL=.*|LOG_LEVEL=${{ inputs.log_level }}|" "$ENV_FILE"
+            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" "$ENV_FILE"
 
-	        export ENV="$NEW_SLOT"
-	        export PORT="$NEW_PORT"
-	        export IMAGE="$IMAGE"
+            [ -n "${{ inputs.db_host }}" ] && sed -i "s|^DB_HOST=.*|DB_HOST=${{ inputs.db_host }}|" "$ENV_FILE"
+            [ -n "${{ inputs.db_port }}" ] && sed -i "s|^DB_PORT=.*|DB_PORT=${{ inputs.db_port }}|" "$ENV_FILE"
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=app_${SLOT}|" "$ENV_FILE"
+            [ -n "${{ inputs.db_username }}" ] && sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ inputs.db_username }}|" "$ENV_FILE"
+            [ -n "${{ inputs.db_password }}" ] && sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ inputs.db_password }}|" "$ENV_FILE"
+            [ -n "${{ inputs.redis_host }}" ] && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${{ inputs.redis_host }}|" "$ENV_FILE"
+            [ -n "${{ inputs.redis_port }}" ] && sed -i "s|^REDIS_PORT=.*|REDIS_PORT=${{ inputs.redis_port }}|" "$ENV_FILE"
+            [ -n "${{ inputs.redis_password }}" ] && sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${{ inputs.redis_password }}|" "$ENV_FILE"
 
-	        cd "$BASE_DIR"
-	        log "Changed directory to $(pwd)"
+            [ -n "${{ inputs.horizon_admin_user }}" ] && sed -i "s|^HORIZON_ADMIN_USER=.*|HORIZON_ADMIN_USER=${{ inputs.horizon_admin_user }}|" "$ENV_FILE"
+            [ -n "${{ inputs.horizon_admin_password }}" ] && sed -i "s|^HORIZON_ADMIN_PASSWORD=.*|HORIZON_ADMIN_PASSWORD=${{ inputs.horizon_admin_password }}|" "$ENV_FILE"
+            [ -n "${{ inputs.telescope_admin_user }}" ] && sed -i "s|^TELESCOPE_ADMIN_USER=.*|TELESCOPE_ADMIN_USER=${{ inputs.telescope_admin_user }}|" "$ENV_FILE"
+            [ -n "${{ inputs.telescope_admin_password }}" ] && sed -i "s|^TELESCOPE_ADMIN_PASSWORD=.*|TELESCOPE_ADMIN_PASSWORD=${{ inputs.telescope_admin_password }}|" "$ENV_FILE"
 
-	        log "Running deploy target for $NEW_SLOT"
-	        run make "deploy-$NEW_SLOT"
+            log "Prepared env for $SLOT: $ENV_FILE"
+          done
 
-	        log "Running health check for $NEW_SLOT"
-	        for i in $(seq 1 10); do
-	          if curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
-	            log "Health check passed on attempt $i"
-	            break
-	          fi
-	          log "Health check attempt $i failed, sleeping 5s"
-	          sleep 5
-	        done
+          export ENV="$NEW_SLOT"
+          export PORT="$NEW_PORT"
+          export IMAGE="$IMAGE"
 
-	        if ! curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
-	          fail "Health check failed for $NEW_SLOT on port $NEW_PORT"
-	        fi
+          cd "$BASE_DIR"
+          log "Changed directory to $(pwd)"
 
-	        log "Switching traffic to $NEW_SLOT"
-	        if ! run make "switch-to-$NEW_SLOT"; then
-	          log "Switch failed, rolling back to $CURRENT_SLOT"
-	          run make "switch-to-$CURRENT_SLOT" || true
-	          fail "Rollback completed after switch failure"
-	        fi
+          log "Running deploy target for $NEW_SLOT"
+          run make "deploy-$NEW_SLOT"
 
-	        log "Updating current slot marker"
-	        echo "$NEW_SLOT" > "$CURRENT_SLOT_FILE"
+          log "Running health check for $NEW_SLOT"
+          for i in $(seq 1 10); do
+            if curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
+              log "Health check passed on attempt $i"
+              break
+            fi
+            log "Health check attempt $i failed, sleeping 5s"
+            sleep 5
+          done
 
-	        log "Stopping old slot: $CURRENT_SLOT"
-	        run make down ENV="$CURRENT_SLOT" || true
-	      
-	        log "Deployment complete. Active slot: $NEW_SLOT"
+          if ! curl -fsS "http://localhost:${NEW_PORT}${HEALTH_PATH}" >/dev/null; then
+            fail "Health check failed for $NEW_SLOT on port $NEW_PORT"
+          fi
+
+          log "Switching traffic to $NEW_SLOT"
+          if ! run make "switch-to-$NEW_SLOT"; then
+            log "Switch failed, rolling back to $CURRENT_SLOT"
+            run make "switch-to-$CURRENT_SLOT" || true
+            fail "Rollback completed after switch failure"
+          fi
+
+          log "Updating current slot marker"
+          echo "$NEW_SLOT" > "$CURRENT_SLOT_FILE"
+
+          log "Stopping old slot: $CURRENT_SLOT"
+          run make down ENV="$CURRENT_SLOT" || true
+
+          log "Deployment complete. Active slot: $NEW_SLOT"
+
