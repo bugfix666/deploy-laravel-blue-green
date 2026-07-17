@@ -54,12 +54,19 @@ inputs:
   db_host:
     description: 'Database host'
     required: false
+    default: 'localhost'
+  db_database:
+    description: 'Database name'
+    required: false
+    default: 'app_db'
   db_port:
     description: 'Database port'
     required: false
+    default: '5432'
   db_username:
     description: 'Database username'
     required: false
+    default: 'appuser'
   db_password:
     description: 'Database password'
     required: false
@@ -239,7 +246,7 @@ runs:
 
             [ -n "${{ inputs.db_host }}" ] && sed -i "s|^DB_HOST=.*|DB_HOST=${{ inputs.db_host }}|" "$ENV_FILE"
             [ -n "${{ inputs.db_port }}" ] && sed -i "s|^DB_PORT=.*|DB_PORT=${{ inputs.db_port }}|" "$ENV_FILE"
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=app_${SLOT}|" "$ENV_FILE"
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ inputs.db_database }}|" "$ENV_FILE"
             [ -n "${{ inputs.db_username }}" ] && sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ inputs.db_username }}|" "$ENV_FILE"
             [ -n "${{ inputs.db_password }}" ] && sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ inputs.db_password }}|" "$ENV_FILE"
             [ -n "${{ inputs.redis_host }}" ] && sed -i "s|^REDIS_HOST=.*|REDIS_HOST=${{ inputs.redis_host }}|" "$ENV_FILE"
