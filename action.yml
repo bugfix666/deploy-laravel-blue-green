@@ -139,6 +139,21 @@ inputs:
     required: false
     default: ''
 
+  env_vars:
+    description: |
+      Arbitrary KEY=VALUE pairs (one per line) merged into each slot .env after
+      built-in mappings. Later lines override earlier ones and built-ins.
+      Empty lines and lines starting with # are ignored.
+    required: false
+    default: ''
+  env_vars_b64:
+    description: |
+      Same as env_vars but Base64-encoded (UTF-8). Prefer when values contain
+      quotes, dollars, or other shell-sensitive characters.
+    required: false
+    default: ''
+
+
 runs:
   using: 'composite'
   steps:
@@ -169,6 +184,72 @@ runs:
           }
 
           trap 'fail "Command failed at line $LINENO: $BASH_COMMAND"' ERR
+
+
+          upsert_env_var() {
+            local file="$1"
+            local key="$2"
+            local value="$3"
+            local tmp
+
+            if [[ -z "$key" ]]; then
+              return 0
+            fi
+            if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+              log "WARN: skip invalid env key: $key"
+              return 0
+            fi
+
+            tmp="$(mktemp)"
+            if [[ -f "$file" ]]; then
+              grep -vE "^${key}=" "$file" >"$tmp" || true
+            else
+              : >"$tmp"
+            fi
+            printf '%s=%s\n' "$key" "$value" >>"$tmp"
+            mv "$tmp" "$file"
+          }
+
+          apply_env_text() {
+            local file="$1"
+            local text="$2"
+            local line key value
+
+            while IFS= read -r line || [[ -n "$line" ]]; do
+              line="${line%$'\r'}"
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+              [[ "$line" != *"="* ]] && continue
+              key="${line%%=*}"
+              value="${line#*=}"
+              if [[ "$value" =~ ^\".*\"$ ]]; then
+                value="${value:1:-1}"
+              elif [[ "$value" =~ ^\'.*\'$ ]]; then
+                value="${value:1:-1}"
+              fi
+              upsert_env_var "$file" "$key" "$value"
+            done <<<"$text"
+          }
+
+          apply_env_overrides() {
+            local file="$1"
+            local plain="$2"
+            local b64="$3"
+
+            if [[ -n "$b64" ]]; then
+              local decoded
+              if decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)"; then
+                log "Applying env_vars_b64 overrides"
+                apply_env_text "$file" "$decoded"
+              else
+                fail "env_vars_b64 is not valid Base64"
+              fi
+            fi
+
+            if [[ -n "$plain" ]]; then
+              log "Applying env_vars overrides"
+              apply_env_text "$file" "$plain"
+            fi
+          }
 
           BASE_DIR="${{ inputs.base_dir }}"
           CADDY_CONFIG="$BASE_DIR/Caddyfile"
@@ -276,6 +357,15 @@ runs:
             [ -n "${{ inputs.auth_opaque_cookie_domain }}" ] && sed -i "s|^AUTH_OPAQUE_COOKIE_DOMAIN=.*|AUTH_OPAQUE_COOKIE_DOMAIN=${{ inputs.auth_opaque_cookie_domain }}|" "$ENV_FILE"
             [ -n "${{ inputs.auth_opaque_cookie_secure }}" ] && sed -i "s|^AUTH_OPAQUE_COOKIE_SECURE=.*|AUTH_OPAQUE_COOKIE_SECURE=${{ inputs.auth_opaque_cookie_secure }}|" "$ENV_FILE"
             [ -n "${{ inputs.cors_allowed_origins }}" ] && sed -i "s|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=${{ inputs.cors_allowed_origins }}|" "$ENV_FILE"
+
+
+            apply_env_overrides "$ENV_FILE" "$(cat <<'__ENV_VARS_PLAIN__'
+${{ inputs.env_vars }}
+__ENV_VARS_PLAIN__
+)" "$(cat <<'__ENV_VARS_B64__'
+${{ inputs.env_vars_b64 }}
+__ENV_VARS_B64__
+)"
 
             log "Prepared env for $SLOT: $ENV_FILE"
           done

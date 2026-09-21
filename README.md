@@ -156,6 +156,52 @@ The action maintains a Caddy configuration file (`/www/Caddyfile` by default) th
 - All secrets are transmitted through GitHub Actions secrets and never appear in logs.
 - The `.env` files are stored on the server with restricted permissions (`www-data` owner, `600` mode).
 
+
+
+## Passing arbitrary secrets and variables
+
+You do **not** need to modify this action when a new env key appears.
+
+### `env_vars` (plain multiline)
+
+```yaml
+- uses: bugfix666/deploy-laravel-blue-green@vX
+  with:
+    ssh_host: ${{ secrets.SSH_HOST }}
+    # ... other required inputs ...
+    env_vars: |
+      AI_API_KEY=${{ secrets.AI_API_KEY }}
+      OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+      CORS_ALLOWED_ORIGINS=${{ vars.CORS_ALLOWED_ORIGINS }}
+      FEATURE_FLAG_X=true
+```
+
+### `env_vars_b64` (special characters)
+
+```yaml
+- name: Encode deploy env
+  id: deploy_env
+  run: |
+    B64=$(printf 'AI_API_KEY=%s
+DB_PASSWORD=%s
+'       '${{ secrets.AI_API_KEY }}'       '${{ secrets.DB_PASSWORD }}' | base64 -w0)
+    echo "b64=$B64" >> "$GITHUB_OUTPUT"
+
+- uses: bugfix666/deploy-laravel-blue-green@vX
+  with:
+    env_vars_b64: ${{ steps.deploy_env.outputs.b64 }}
+```
+
+### Merge order
+
+1. `.env.example` template  
+2. Built-in inputs (`db_*`, `redis_*`, horizon/telescope, …)  
+3. `env_vars_b64`  
+4. `env_vars` (wins)
+
+Values are never logged. Keys must match `[A-Za-z_][A-Za-z0-9_]*`.
+
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or a pull request.  
