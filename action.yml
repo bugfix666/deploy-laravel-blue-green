@@ -231,6 +231,11 @@ runs:
               elif [[ "$value" =~ ^\'.*\'$ ]]; then
                 value="${value:1:-1}"
               fi
+              # Skip empty values — missing GH secrets expand to KEY= and must not wipe JWT_SECRET.
+              if [[ -z "$value" ]]; then
+                log "WARN: skip empty env value for key=$key"
+                continue
+              fi
               upsert_env_var "$file" "$key" "$value"
             done <<<"$text"
           }
@@ -329,13 +334,13 @@ runs:
 
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
               if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-                APP_KEY="base64:$(openssl rand -base64 32)"
+                APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
               else
                 APP_KEY="$(openssl rand -hex 32)"
               fi
               JWT_SECRET="$(openssl rand -hex 64)"
-              sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "$ENV_FILE"
-              sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" "$ENV_FILE"
+              upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
+              upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
               log "Generated keys for $SLOT"
             fi
 
@@ -364,6 +369,23 @@ runs:
             [ -n "${{ inputs.cors_allowed_origins }}" ] && sed -i "s|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=${{ inputs.cors_allowed_origins }}|" "$ENV_FILE"
 
             apply_env_overrides "$ENV_FILE" "${DEPLOY_ENV_VARS-}" "${DEPLOY_ENV_VARS_B64-}"
+
+            if [ "${{ inputs.generate_app_key }}" = "true" ]; then
+              if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
+                if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
+                  APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
+                else
+                  APP_KEY="$(openssl rand -hex 32)"
+                fi
+                upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
+                log "Generated missing APP_KEY for $SLOT"
+              fi
+              if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
+                JWT_SECRET="$(openssl rand -hex 64)"
+                upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
+                log "Generated missing JWT_SECRET for $SLOT"
+              fi
+            fi
 
             log "Prepared env for $SLOT: $ENV_FILE"
           done
