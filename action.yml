@@ -81,7 +81,7 @@ inputs:
     required: false
 
   generate_app_key:
-    description: 'Automatically generate APP_KEY (base64:...) and JWT_SECRET (hex)'
+    description: 'If APP_KEY/JWT_SECRET are empty in slot .env, generate them (no GitHub Secret required). Existing values are kept.'
     required: false
     default: 'true'
   app_key_prefix:
