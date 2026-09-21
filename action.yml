@@ -215,6 +215,55 @@ runs:
             mv "$tmp" "$file"
           }
 
+
+          # Valid Laravel APP_KEY: "base64:" + base64(32 bytes) OR 64 hex chars
+          is_valid_app_key() {
+            local key="$1"
+            if [[ "$key" =~ ^base64:[A-Za-z0-9+/=]+$ ]]; then
+              local b64="${key#base64:}"
+              local decoded
+              decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null | wc -c | tr -d ' ')"
+              [[ "$decoded" == "32" ]] && return 0
+              return 1
+            fi
+            if [[ "$key" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+              return 0
+            fi
+            return 1
+          }
+
+          ensure_app_key() {
+            local file="$1"
+            local current
+            current="$(grep -E '^APP_KEY=' "$file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+            if [[ -n "$current" ]] && is_valid_app_key "$current"; then
+              log "APP_KEY valid (kept)"
+              return 0
+            fi
+            local APP_KEY
+            if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
+              APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\n\r')"
+            else
+              APP_KEY="$(openssl rand -hex 32)"
+            fi
+            upsert_env_var "$file" "APP_KEY" "$APP_KEY"
+            log "Generated valid APP_KEY"
+          }
+
+          ensure_jwt_secret() {
+            local file="$1"
+            local current
+            current="$(grep -E '^JWT_SECRET=' "$file" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+            if [[ -n "$current" && ${#current} -ge 32 ]]; then
+              log "JWT_SECRET present (kept)"
+              return 0
+            fi
+            local JWT_SECRET
+            JWT_SECRET="$(openssl rand -hex 64)"
+            upsert_env_var "$file" "JWT_SECRET" "$JWT_SECRET"
+            log "Generated JWT_SECRET"
+          }
+
           apply_env_text() {
             local file="$1"
             local text="$2"
@@ -338,21 +387,8 @@ runs:
             fi
 
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
-              # Only create secrets when missing — never rotate on every deploy.
-              if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
-                if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-                  APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
-                else
-                  APP_KEY="$(openssl rand -hex 32)"
-                fi
-                upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
-                log "Generated APP_KEY for $SLOT"
-              fi
-              if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
-                JWT_SECRET="$(openssl rand -hex 64)"
-                upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
-                log "Generated JWT_SECRET for $SLOT"
-              fi
+              ensure_app_key "$ENV_FILE"
+              ensure_jwt_secret "$ENV_FILE"
             fi
 
             sed -i "s|^APP_ENV=.*|APP_ENV=${{ inputs.app_env }}|" "$ENV_FILE"
@@ -382,20 +418,8 @@ runs:
             apply_env_overrides "$ENV_FILE" "${DEPLOY_ENV_VARS-}" "${DEPLOY_ENV_VARS_B64-}"
 
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
-              if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
-                if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-                  APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
-                else
-                  APP_KEY="$(openssl rand -hex 32)"
-                fi
-                upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
-                log "Generated missing APP_KEY for $SLOT"
-              fi
-              if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
-                JWT_SECRET="$(openssl rand -hex 64)"
-                upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
-                log "Generated missing JWT_SECRET for $SLOT"
-              fi
+              ensure_app_key "$ENV_FILE"
+              ensure_jwt_secret "$ENV_FILE"
             fi
 
             log "Prepared env for $SLOT: $ENV_FILE"
@@ -404,8 +428,9 @@ runs:
             if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
               fail "JWT_SECRET is empty in $ENV_FILE after env preparation"
             fi
-            if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
-              fail "APP_KEY is empty in $ENV_FILE after env preparation"
+            APP_KEY_VAL="$(grep -E '^APP_KEY=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+            if [[ -z "$APP_KEY_VAL" ]] || ! is_valid_app_key "$APP_KEY_VAL"; then
+              fail "APP_KEY is missing or invalid in $ENV_FILE (need base64: + 32 bytes). Remove APP_KEY line to regenerate."
             fi
             log "Secrets present in $ENV_FILE (JWT_SECRET length=$(grep -E '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2- | wc -c))"
           done
