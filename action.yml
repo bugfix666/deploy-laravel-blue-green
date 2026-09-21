@@ -49,7 +49,7 @@ inputs:
   health_path:
     description: 'Health check endpoint (e.g. /health)'
     required: false
-    default: '/health'
+    default: '/up'
 
   db_host:
     description: 'Database host'
@@ -330,7 +330,12 @@ runs:
             ENV_FILE="$SLOT_DIR/.env"
 
             run mkdir -p "$SLOT_DIR"
-            run cp "$BASE_DIR/.env.example" "$ENV_FILE"
+            if [ ! -f "$ENV_FILE" ]; then
+              run cp "$BASE_DIR/.env.example" "$ENV_FILE"
+              log "Created new env from example: $ENV_FILE"
+            else
+              log "Reusing existing env file: $ENV_FILE"
+            fi
 
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
               # Only create secrets when missing — never rotate on every deploy.
