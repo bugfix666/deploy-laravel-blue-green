@@ -333,15 +333,21 @@ runs:
             run cp "$BASE_DIR/.env.example" "$ENV_FILE"
 
             if [ "${{ inputs.generate_app_key }}" = "true" ]; then
-              if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
-                APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
-              else
-                APP_KEY="$(openssl rand -hex 32)"
+              # Only create secrets when missing — never rotate on every deploy.
+              if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
+                if [ "${{ inputs.app_key_prefix }}" = "true" ]; then
+                  APP_KEY="base64:$(openssl rand -base64 32 | tr -d '\\n')"
+                else
+                  APP_KEY="$(openssl rand -hex 32)"
+                fi
+                upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
+                log "Generated APP_KEY for $SLOT"
               fi
-              JWT_SECRET="$(openssl rand -hex 64)"
-              upsert_env_var "$ENV_FILE" "APP_KEY" "$APP_KEY"
-              upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
-              log "Generated keys for $SLOT"
+              if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
+                JWT_SECRET="$(openssl rand -hex 64)"
+                upsert_env_var "$ENV_FILE" "JWT_SECRET" "$JWT_SECRET"
+                log "Generated JWT_SECRET for $SLOT"
+              fi
             fi
 
             sed -i "s|^APP_ENV=.*|APP_ENV=${{ inputs.app_env }}|" "$ENV_FILE"
@@ -388,6 +394,15 @@ runs:
             fi
 
             log "Prepared env for $SLOT: $ENV_FILE"
+
+            # Hard fail if crypto secrets missing — prevents 422 "Secret is not set" on /health.
+            if ! grep -qE '^JWT_SECRET=.+' "$ENV_FILE"; then
+              fail "JWT_SECRET is empty in $ENV_FILE after env preparation"
+            fi
+            if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
+              fail "APP_KEY is empty in $ENV_FILE after env preparation"
+            fi
+            log "Secrets present in $ENV_FILE (JWT_SECRET length=$(grep -E '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2- | wc -c))"
           done
 
           export ENV="$NEW_SLOT"
